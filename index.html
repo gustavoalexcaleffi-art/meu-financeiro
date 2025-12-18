@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestor Financeiro Pro - v29</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary: #4a90e2; --success: #2ecc71; --danger: #e74c3c;
+            --warning: #f1c40f; --bg: #f4f7f6; --dark: #2c3e50; --purple: #9b59b6;
+        }
+
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); margin: 0; padding: 10px; color: var(--dark); }
+        .container { max-width: 1000px; margin: auto; background: white; border-radius: 15px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+        
+        .nav { display: flex; background: #eee; border-bottom: 1px solid #ddd; overflow-x: auto; }
+        .nav button { flex: 1; padding: 15px; border: none; cursor: pointer; background: none; font-weight: bold; color: #777; white-space: nowrap; }
+        .nav button.active { background: white; color: var(--primary); border-bottom: 3px solid var(--primary); }
+
+        .content { padding: 20px; display: none; }
+        .content.active { display: block; }
+
+        .card { background: #fff; padding: 15px; border-radius: 10px; border: 1px solid #eee; text-align: center; }
+        .mini-lista-contas { text-align: left; font-size: 0.75rem; margin-top: 10px; border-top: 1px solid #eee; padding-top: 8px; color: #666; }
+        .mini-conta-item { display: flex; justify-content: space-between; padding: 2px 0; }
+
+        .ranking-item { display: flex; justify-content: space-between; padding: 4px 0; font-size: 0.85rem; }
+        .ranking-bar-container { background: #eee; height: 6px; border-radius: 3px; margin-bottom: 8px; overflow: hidden; }
+        .ranking-bar { background: var(--danger); height: 100%; border-radius: 3px; }
+
+        .trans-item { padding: 12px; border-radius: 8px; margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; border: 1px solid #ddd; }
+        .item-pendente { background: #fff; border-style: dashed; opacity: 0.85; border-color: #bbb; }
+        .item-efetivado { background: #f1fcf4; border-color: var(--success); border-style: solid; }
+        
+        .badge { font-size: 0.6rem; padding: 2px 5px; border-radius: 4px; font-weight: bold; text-transform: uppercase; margin-left: 5px; }
+        .badge-pendente { background: #eee; color: #777; }
+        .badge-efetivado { background: var(--success); color: white; }
+
+        .val-pos { color: var(--success); font-weight: bold; }
+        .val-neg { color: var(--danger); font-weight: bold; }
+
+        .form-group { display: flex; flex-direction: column; gap: 8px; margin-bottom: 25px; background: #fdfdfd; padding: 15px; border: 1px dashed #ccc; border-radius: 10px; }
+        input, select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box;}
+        .main-btn { width: 100%; padding: 14px; background: var(--primary); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
+        .btn-icon { border: none; background: none; cursor: pointer; font-size: 1.1rem; margin-left: 5px; padding: 5px; border-radius: 5px; transition: 0.2s;}
+        .btn-icon:hover { background: #eee; }
+        
+        ul { list-style: none; padding: 0; }
+        li { background: #f9f9f9; padding: 10px; margin-bottom: 5px; border-radius: 5px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #eee; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="nav">
+        <button onclick="openTab(event, 'tab-dash')" class="active">Dashboard</button>
+        <button onclick="openTab(event, 'tab-livro')">Livro Caixa</button>
+        <button onclick="openTab(event, 'tab-transacoes')">Lançamentos</button>
+        <button onclick="openTab(event, 'tab-config')">Configurações</button>
+    </div>
+
+    <div style="background: #fff; padding: 15px; border-bottom: 1px solid #eee; display: flex; justify-content: center; align-items: center; gap: 10px;">
+        <label style="font-weight:bold; font-size:0.9rem">Mês de Referência:</label>
+        <input type="month" id="filter-mes" onchange="renderAll()">
+    </div>
+
+    <div id="tab-dash" class="content active">
+        <div id="caixa-alerta"></div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+            <div class="card">
+                <h6>DRE Planejado</h6>
+                <div id="res-plan" style="font-weight:bold; font-size: 1.1rem;">R$ 0,00</div>
+                <div style="height:90px"><canvas id="chartPlan"></canvas></div>
+            </div>
+            <div class="card">
+                <h6>DRE Efetivado</h6>
+                <div id="res-efet" style="font-weight:bold; font-size: 1.1rem;">R$ 0,00</div>
+                <div style="height:90px"><canvas id="chartEfet"></canvas></div>
+            </div>
+        </div>
+        <div style="display: grid; grid-template-columns: 1.6fr 1fr; gap: 15px; margin-bottom: 15px;">
+            <div class="card">
+                <h6>📈 Evolução dos Investimentos</h6>
+                <div style="height:180px"><canvas id="chartEvolucao"></canvas></div>
+            </div>
+            <div class="card" style="text-align: left;">
+                <h6>🏆 Top Gastos (Mês)</h6>
+                <div id="ranking-despesas" style="margin-top:5px"></div>
+            </div>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+            <div class="card" style="background:#eef6ff; border-color:#d0e3ff">
+                <small>Saldo Disponível no Mês</small>
+                <div id="dash-corrente-total" style="color:var(--primary); font-size:1.1rem; font-weight:bold">R$ 0,00</div>
+                <div id="dash-corrente-lista" class="mini-lista-contas"></div>
+            </div>
+            <div class="card" style="background:#f9f5ff; border-color:#eadbff">
+                <small>Patrimônio Investido no Mês</small>
+                <div id="dash-invest-total" style="color:var(--purple); font-size:1.1rem; font-weight:bold">R$ 0,00</div>
+                <div id="dash-invest-lista" class="mini-lista-contas"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="tab-livro" class="content">
+        <h3>📖 Fluxo de Caixa Diário</h3>
+        <table style="width:100%; border-collapse: collapse; font-size:0.85rem">
+            <thead><tr style="background:#f4f4f4; border-bottom: 2px solid #ddd;"><th>Data</th><th>Descrição</th><th>Valor</th><th>Saldo</th></tr></thead>
+            <tbody id="lista-livro-caixa"></tbody>
+        </table>
+    </div>
+
+    <div id="tab-transacoes" class="content">
+        <h3 id="form-title">💸 Lançamento</h3>
+        <div class="form-group" id="main-form">
+            <div style="display:flex; gap:10px">
+                <input type="date" id="t-data" style="flex:1">
+                <select id="t-tipo" onchange="toggleFields()" style="flex:1">
+                    <option value="Despesa">Despesa (-)</option>
+                    <option value="Receita">Receita (+)</option>
+                    <option value="Rendimento">Rendimento (+)</option>
+                    <option value="Transferencia">Transferência ⇄</option>
+                </select>
+            </div>
+            <input type="text" id="t-nome" placeholder="Descrição">
+            <input type="number" id="t-valor" placeholder="Valor R$" step="0.01">
+            <div style="display:flex; gap:10px">
+                <select id="t-conta" style="flex:1"></select>
+                <select id="t-conta-destino" style="flex:1; display:none"></select>
+                <select id="t-categoria" style="flex:1"></select>
+            </div>
+            <button class="main-btn" id="btn-salvar" onclick="handleSave()">Salvar Lançamento</button>
+        </div>
+        <div id="lista-transacoes"></div>
+    </div>
+
+    <div id="tab-config" class="content">
+        <h3>🏦 Gestão de Contas</h3>
+        <div class="form-group">
+            <input type="text" id="c-nome" placeholder="Nome da Conta">
+            <select id="c-tipo"><option value="Corrente">Corrente</option><option value="Investimento">Investimento</option></select>
+            <input type="number" id="c-saldo" placeholder="Saldo Inicial">
+            <button class="main-btn" onclick="addAccount()">Cadastrar Conta</button>
+        </div>
+        <ul id="lista-contas-config"></ul>
+        <hr>
+        <h3>🏷️ Gestão de Categorias</h3>
+        <div class="form-group"><input type="text" id="cat-nome" placeholder="Nova Categoria"><button class="main-btn" onclick="addCategory()">Cadastrar</button></div>
+        <ul id="lista-categorias-config"></ul>
+        <hr>
+        <button class="main-btn" onclick="exportData()" style="background:#2c3e50">EXPORTAR BACKUP</button>
+        <input type="file" id="importFile" style="display:none" onchange="importData(event)">
+        <button class="main-btn" onclick="document.getElementById('importFile').click()" style="background:#8e44ad; margin-top:10px">IMPORTAR BACKUP</button>
+    </div>
+</div>
+
+<script>
+    let db = JSON.parse(localStorage.getItem('finance_v29')) || { transacoes: [], contas: [], categorias: ['Salário', 'Mercado', 'Lazer', 'Moradia', 'Investimento'] };
+    let chartPlan, chartEfet, chartEvol;
+    const fmt = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    document.getElementById('filter-mes').value = new Date().toISOString().substring(0, 7);
+    document.getElementById('t-data').valueAsDate = new Date();
+
+    function save() { localStorage.setItem('finance_v29', JSON.stringify(db)); renderAll(); }
+    function openTab(evt, name) { 
+        document.querySelectorAll(".content").forEach(c => c.classList.remove("active")); 
+        document.querySelectorAll(".nav button").forEach(b => b.classList.remove("active"));
+        document.getElementById(name).classList.add("active"); evt.currentTarget.classList.add("active");
+        renderAll();
+    }
+    function toggleFields() {
+        const t = document.getElementById('t-tipo').value;
+        document.getElementById('t-conta-destino').style.display = (t === 'Transferencia') ? 'block' : 'none';
+        document.getElementById('t-categoria').style.display = (t === 'Transferencia') ? 'none' : 'block';
+    }
+
+    function addAccount() {
+        const n = document.getElementById('c-nome').value;
+        if(n) { db.contas.push({ nome: n, tipo: document.getElementById('c-tipo').value, saldoInicial: parseFloat(document.getElementById('c-saldo').value)||0 }); save(); document.getElementById('c-nome').value=""; }
+    }
+    function addCategory() {
+        const n = document.getElementById('cat-nome').value;
+        if(n) { db.categorias.push(n); save(); document.getElementById('cat-nome').value=""; }
+    }
+
+    function handleSave() {
+        const v = Math.abs(parseFloat(document.getElementById('t-valor').value));
+        if(!v || !document.getElementById('t-nome').value) return;
+        const t = {
+            id: Date.now(),
+            nome: document.getElementById('t-nome').value,
+            valor: (document.getElementById('t-tipo').value === 'Despesa') ? -v : v,
+            tipo: document.getElementById('t-tipo').value,
+            data: document.getElementById('t-data').value,
+            conta: document.getElementById('t-conta').value,
+            contaDestino: document.getElementById('t-conta-destino').value,
+            cat: document.getElementById('t-categoria').value,
+            concluido: false
+        };
+        db.transacoes.unshift(t);
+        save();
+        document.getElementById('t-nome').value = ""; document.getElementById('t-valor').value = "";
+    }
+
+    function editItem(id) {
+        const t = db.transacoes.find(x => x.id === id);
+        if(!t) return;
+        document.getElementById('t-data').value = t.data;
+        document.getElementById('t-tipo').value = t.tipo;
+        document.getElementById('t-nome').value = t.nome;
+        document.getElementById('t-valor').value = Math.abs(t.valor);
+        document.getElementById('t-conta').value = t.conta;
+        document.getElementById('t-conta-destino').value = t.contaDestino;
+        document.getElementById('t-categoria').value = t.cat;
+        toggleFields();
+        db.transacoes = db.transacoes.filter(x => x.id !== id);
+        openTab({currentTarget: document.querySelector('button[onclick*="tab-transacoes"]')}, 'tab-transacoes');
+        document.getElementById('t-nome').focus();
+    }
+
+    function renderAll() {
+        const optC = db.contas.map(c => `<option value="${c.nome}">${c.nome}</option>`).join('');
+        document.getElementById('t-conta').innerHTML = optC;
+        document.getElementById('t-conta-destino').innerHTML = optC;
+        document.getElementById('t-categoria').innerHTML = db.categorias.map(c => `<option value="${c}">${c}</option>`).join('');
+
+        const [fAno, fMesRaw] = document.getElementById('filter-mes').value.split('-').map(Number);
+        const fMes = fMesRaw - 1;
+        const lastDayOfMonth = new Date(fAno, fMesRaw, 0);
+
+        let saldos = {}; db.contas.forEach(c => saldos[c.nome] = c.saldoInicial);
+        let pRec = 0, pDes = 0, eRec = 0, eDes = 0;
+        let catsRanking = {};
+        let transSorted = [...db.transacoes].sort((a,b) => new Date(a.data) - new Date(b.data));
+        
+        let runningCaixa = 0;
+        db.contas.forEach(c => { if(c.tipo === 'Corrente') runningCaixa += c.saldoInicial; });
+        let htmlLivro = "";
+        let alertData = null;
+
+        transSorted.forEach(t => {
+            const tDate = new Date(t.data + 'T00:00:00');
+            const noMes = tDate.getMonth() === fMes && tDate.getFullYear() === fAno;
+            
+            // Lógica: Saldo acumulado até o final do mês selecionado
+            if(t.concluido && tDate <= lastDayOfMonth) {
+                if(t.tipo === 'Transferencia') { saldos[t.conta] -= Math.abs(t.valor); saldos[t.contaDestino] += Math.abs(t.valor); }
+                else saldos[t.conta] += t.valor;
+            }
+
+            if(noMes) {
+                if(t.tipo === 'Receita') { pRec += Math.abs(t.valor); if(t.concluido) eRec += Math.abs(t.valor); }
+                else if(t.tipo === 'Despesa') { pDes += Math.abs(t.valor); if(t.concluido) eDes += Math.abs(t.valor); catsRanking[t.cat] = (catsRanking[t.cat] || 0) + Math.abs(t.valor); }
+            }
+
+            if(t.tipo !== 'Rendimento') {
+                const cInfo = db.contas.find(c => c.nome === t.conta);
+                const cdInfo = db.contas.find(c => c.nome === t.contaDestino);
+                let imp = 0;
+                if(t.tipo === 'Transferencia') {
+                    if(cInfo?.tipo === 'Corrente' && cdInfo?.tipo !== 'Corrente') imp = -Math.abs(t.valor);
+                    if(cInfo?.tipo !== 'Corrente' && cdInfo?.tipo === 'Corrente') imp = Math.abs(t.valor);
+                } else if(cInfo?.tipo === 'Corrente') imp = t.valor;
+                
+                if(tDate <= lastDayOfMonth) runningCaixa += imp;
+                if(noMes && runningCaixa < 0 && !alertData) alertData = { d: tDate.toLocaleDateString(), v: runningCaixa };
+                if(noMes && imp !== 0) htmlLivro += `<tr><td>${tDate.toLocaleDateString()}</td><td>${t.nome}</td><td class="${imp >= 0 ? 'val-pos' : 'val-neg'}">${fmt(imp)}</td><td class="${runningCaixa >= 0 ? 'val-pos' : 'val-neg'}">${fmt(runningCaixa)}</td></tr>`;
+            }
+        });
+
+        // Gráfico Evolução
+        let evolLabels = [], evolData = [];
+        for(let i=5; i>=0; i--) {
+            let d = new Date(fAno, fMes-i, 1);
+            evolLabels.push(d.toLocaleDateString('pt-BR', {month:'short'}));
+            let tInv = 0;
+            let tempS = {}; db.contas.forEach(c => tempS[c.nome] = c.saldoInicial);
+            transSorted.forEach(t => {
+                if(new Date(t.data + 'T00:00:00') <= new Date(fAno, fMes-i + 1, 0)) {
+                   if(t.concluido) {
+                       if(t.tipo === 'Transferencia') { tempS[t.conta] -= Math.abs(t.valor); tempS[t.contaDestino] += Math.abs(t.valor); }
+                       else tempS[t.conta] += t.valor;
+                   }
+                }
+            });
+            db.contas.forEach(c => { if(c.tipo === 'Investimento') tInv += tempS[c.nome]; });
+            evolData.push(tInv);
+        }
+
+        document.getElementById('caixa-alerta').innerHTML = alertData ? `<div style="background:#ffebee; color:red; padding:10px; border-radius:10px; margin-bottom:15px; text-align:center; font-weight:bold; font-size:0.8rem">⚠️ CAIXA NEGATIVO EM ${alertData.d}</div>` : "";
+        document.getElementById('res-plan').innerText = fmt(pRec - pDes);
+        document.getElementById('res-efet').innerText = fmt(eRec - eDes);
+        
+        let tC = 0, tI = 0, hC = "", hI = "";
+        db.contas.forEach(c => {
+            let val = saldos[c.nome];
+            let item = `<div class="mini-conta-item"><span>${c.nome}</span><b>${fmt(val)}</b></div>`;
+            if(c.tipo === 'Corrente') { tC += val; hC += item; } else { tI += val; hI += item; }
+        });
+        document.getElementById('dash-corrente-total').innerText = fmt(tC);
+        document.getElementById('dash-invest-total').innerText = fmt(tI);
+        document.getElementById('dash-corrente-lista').innerHTML = hC;
+        document.getElementById('dash-invest-lista').innerHTML = hI;
+
+        let rHTML = "";
+        const sCats = Object.entries(catsRanking).sort((a,b) => b[1] - a[1]).slice(0,5);
+        const mG = sCats[0]?.[1] || 1;
+        sCats.forEach(([cat, val]) => {
+            rHTML += `<div class="ranking-item"><span>${cat}</span><b>${fmt(val)}</b></div>
+                      <div class="ranking-bar-container"><div class="ranking-bar" style="width:${(val/mG)*100}%"></div></div>`;
+        });
+        document.getElementById('ranking-despesas').innerHTML = rHTML || "Sem dados.";
+
+        renderCharts(pRec, pDes, eRec, eDes, evolLabels, evolData);
+
+        document.getElementById('lista-transacoes').innerHTML = db.transacoes.map(t => `
+            <div class="trans-item ${t.concluido ? 'item-efetivado' : 'item-pendente'}">
+                <div style="display:flex; align-items:center">
+                    <input type="checkbox" ${t.concluido?'checked':''} onclick="toggleStatus(${t.id})" style="transform: scale(1.2)">
+                    <div style="margin-left:12px">
+                        <b>${t.nome}</b> <span class="badge ${t.concluido ? 'badge-efetivado' : 'badge-pendente'}">${t.concluido ? 'OK' : 'PEND'}</span>
+                        <br><small>${t.data} | ${t.cat}</small>
+                    </div>
+                </div>
+                <div style="text-align:right">
+                    <span class="${t.valor >= 0 ? 'val-pos' : 'val-neg'}">${fmt(t.valor)}</span><br>
+                    <button class="btn-icon" onclick="editItem(${t.id})">✏️</button>
+                    <button class="btn-icon" onclick="if(confirm('Excluir?')){db.transacoes=db.transacoes.filter(x=>x.id!==${t.id});save()}">🗑️</button>
+                </div>
+            </div>`).join('');
+        
+        document.getElementById('lista-livro-caixa').innerHTML = htmlLivro || '<tr><td colspan="4" style="text-align:center">Sem movimentação no mês.</td></tr>';
+        document.getElementById('lista-contas-config').innerHTML = db.contas.map((c, i) => `<li>${c.nome} (${c.tipo}) <button onclick="db.contas.splice(${i},1);save()" style="border:none; color:red; cursor:pointer">X</button></li>`).join('');
+        document.getElementById('lista-categorias-config').innerHTML = db.categorias.map((cat, i) => `<li>${cat} <button onclick="db.categorias.splice(${i},1);save()" style="border:none; color:red; cursor:pointer">X</button></li>`).join('');
+    }
+
+    function renderCharts(pR, pD, eR, eD, evolL, evolD) {
+        if(chartPlan) chartPlan.destroy(); if(chartEfet) chartEfet.destroy(); if(chartEvol) chartEvol.destroy();
+        const o = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } };
+        chartPlan = new Chart(document.getElementById('chartPlan'), { type: 'bar', data: { labels: ['+', '-'], datasets: [{ data: [pR, pD], backgroundColor: ['#2ecc71', '#e74c3c'] }]}, options: o });
+        chartEfet = new Chart(document.getElementById('chartEfet'), { type: 'bar', data: { labels: ['+', '-'], datasets: [{ data: [eR, eD], backgroundColor: ['#2ecc71', '#e74c3c'] }]}, options: o });
+        chartEvol = new Chart(document.getElementById('chartEvolucao'), { type: 'line', data: { labels: evolL, datasets: [{ data: evolD, borderColor: '#9b59b6', tension: 0.3, fill: true, backgroundColor: 'rgba(155, 89, 182, 0.1)' }]}, options: o });
+    }
+
+    function toggleStatus(id) { let t = db.transacoes.find(x => x.id === id); if(t) t.concluido = !t.concluido; save(); }
+    function exportData() { const blob = new Blob([JSON.stringify(db)], {type: 'application/json'}); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'backup.json'; a.click(); }
+    function importData(e) { const r = new FileReader(); r.onload = (ev) => { db = JSON.parse(ev.target.result); save(); location.reload(); }; r.readAsText(e.target.files[0]); }
+
+    renderAll();
+</script>
+</body>
+</html>
